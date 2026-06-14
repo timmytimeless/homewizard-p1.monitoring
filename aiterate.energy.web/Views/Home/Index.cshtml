@@ -1,0 +1,204 @@
+@{
+    ViewData["Title"] = "HomeWizard P1 realtime data";
+}
+<h1 class="text-warning">@ViewData["Title"]</h1>
+
+<p class="text-success">Realtime insight into energy consumption at your home.</p>
+
+<div id="streamInfo" style="margin:8px 0; font-size:0.9rem; color:#444;"></div>
+
+<h2>Latest measurement</h2>
+<table id="latestTable" style="border-collapse:collapse; width:100%; max-width:1000px; font-size:12px;">
+    <thead></thead>
+    <tbody></tbody>
+</table>
+<style>
+    /* compact table styles */
+    #latestTable th, #latestTable td { padding:4px 6px; border-bottom:1px solid #eee; text-align:left; }
+    #latestTable th { font-weight:700; font-size:11px; color:#333; }
+    #latestTable td { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace; }
+
+    #historyTable th, #historyTable td { padding:4px 6px; border-bottom:1px solid #eee; font-size:12px; }
+    /* very light gray background for history data cells */
+    #historyTable tbody td { background: #f7f7f7; }
+    #historyTable pre { font-size:11px; margin:0; }
+</style>
+
+<h2>History</h2>
+<table id="historyTable" style="border-collapse:collapse; width:100%; max-width:1000px;">
+    <thead>
+        <tr>
+            <th style="text-align:left; padding:6px; border-bottom:1px solid #ddd;">Time</th>
+            <th style="text-align:left; padding:6px; border-bottom:1px solid #ddd;">Data</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+(function(){
+    const info = document.getElementById('streamInfo');
+    const latestBody = document.querySelector('#latestTable tbody');
+    const historyBody = document.querySelector('#historyTable tbody');
+
+    let historyKeys = [];
+    let historyLabels = {};
+
+    function buildHistoryHeader(keys, labels) {
+        const table = document.getElementById('historyTable');
+        let thead = table.querySelector('thead');
+        if (!thead) { thead = document.createElement('thead'); table.insertBefore(thead, table.firstChild); }
+        thead.innerHTML = '';
+        const tr = document.createElement('tr');
+        const thTime = document.createElement('th');
+        thTime.textContent = 'Time';
+        thTime.style.textAlign = 'left';
+        thTime.style.padding = '6px';
+        thTime.style.borderBottom = '1px solid #ddd';
+        tr.appendChild(thTime);
+        (keys || []).forEach(k => {
+            const th = document.createElement('th');
+            th.textContent = (labels && labels[k]) ? labels[k] : k;
+            th.style.padding = '6px';
+            th.style.borderBottom = '1px solid #ddd';
+            tr.appendChild(th);
+        });
+        thead.appendChild(tr);
+    }
+
+    if (!window.EventSource) {
+        info.textContent = 'EventSource not supported in this browser.';
+        return;
+    }
+
+    const es = new EventSource('/stream');
+
+    function renderLatest(obj, labels) {
+        // Build a compact horizontal table: keys -> column headers, single row of values
+        const keys = Object.keys(obj || {});
+
+        const table = document.getElementById('latestTable');
+        let thead = table.querySelector('thead');
+        let tbody = table.querySelector('tbody');
+        if (!thead) { thead = document.createElement('thead'); table.insertBefore(thead, table.firstChild); }
+        if (!tbody) { tbody = document.createElement('tbody'); table.appendChild(tbody); }
+
+        // Build header
+        thead.innerHTML = '';
+        const headerTr = document.createElement('tr');
+        keys.forEach(k => {
+            const th = document.createElement('th');
+            th.textContent = (labels && labels[k]) ? labels[k] : k;
+            headerTr.appendChild(th);
+        });
+        thead.appendChild(headerTr);
+
+        // Build single value row
+        tbody.innerHTML = '';
+        const valTr = document.createElement('tr');
+        keys.forEach(k => {
+            const td = document.createElement('td');
+            let v = obj[k];
+            if (v === null || v === undefined) v = '';
+            else if (typeof v === 'object') v = JSON.stringify(v);
+            td.textContent = String(v);
+            valTr.appendChild(td);
+        });
+        tbody.appendChild(valTr);
+
+        // Ensure history columns match latest keys/labels
+        historyKeys = keys;
+        historyLabels = labels || {};
+        buildHistoryHeader(historyKeys, historyLabels);
+    }
+
+    function appendHistory(obj) {
+        const tr = document.createElement('tr');
+        const timeTd = document.createElement('td');
+        timeTd.style.padding = '6px';
+        timeTd.style.verticalAlign = 'top';
+        timeTd.style.borderBottom = '1px solid #eee';
+        timeTd.textContent = new Date().toLocaleTimeString();
+        tr.appendChild(timeTd);
+
+        // If we have keys defined, render each key as a column so history matches Latest
+        if (Array.isArray(historyKeys) && historyKeys.length > 0 && obj && typeof obj === 'object') {
+            historyKeys.forEach(k => {
+                const td = document.createElement('td');
+                td.style.padding = '6px';
+                td.style.borderBottom = '1px solid #eee';
+                let v = obj[k];
+                if (v === null || v === undefined) v = '';
+                else if (typeof v === 'object') v = JSON.stringify(v);
+                td.textContent = String(v);
+                tr.appendChild(td);
+            });
+        } else {
+            const dataTd = document.createElement('td');
+            dataTd.style.padding = '6px';
+            dataTd.style.borderBottom = '1px solid #eee';
+            const pre = document.createElement('pre');
+            pre.style.margin = '0';
+            pre.style.whiteSpace = 'pre-wrap';
+            try { pre.textContent = JSON.stringify(obj, null, 2); } catch(e) { pre.textContent = String(obj); }
+            dataTd.appendChild(pre);
+            tr.appendChild(dataTd);
+        }
+
+        historyBody.insertBefore(tr, historyBody.firstChild);
+        // limit history rows
+        while (historyBody.children.length > 100) historyBody.removeChild(historyBody.lastChild);
+    }
+
+    es.onmessage = function(e) {
+        let raw = e.data;
+        let parsed = null;
+
+        // Primary JSON parse
+        try { parsed = JSON.parse(raw); } catch {}
+
+        // If parsing failed, try unwrapping quoted JSON (e.g. "{...}")
+        if (!parsed && typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+                try {
+                    const unquoted = JSON.parse(trimmed); // turns '"{...}"' into '{...}'
+                    parsed = JSON.parse(unquoted);
+                } catch {}
+            }
+        }
+
+        // If still not parsed, try to extract first JSON object substring
+        if (!parsed && typeof raw === 'string') {
+            const m = raw.match(/\{[\s\S]*\}/);
+            if (m) {
+                try { parsed = JSON.parse(m[0]); } catch {}
+            }
+        }
+
+        if (parsed) {
+            // Info about source
+            if (parsed.source) {
+                info.textContent = 'Streaming from: ' + parsed.source + (parsed.token_mask ? (' (token: ' + parsed.token_mask + ')') : '');
+                return;
+            }
+
+            // If message wraps measurement in { type: 'measurement', data: { ... } }
+            if (parsed.type === 'measurement' && parsed.data) {
+                renderLatest(parsed.data, parsed.labels);
+                appendHistory(parsed.data);
+                return;
+            }
+
+            // Other typed messages (authorization, etc.) - show in history
+            appendHistory(parsed);
+        } else {
+            appendHistory({ raw: raw });
+        }
+    };
+
+    es.onerror = function(e) {
+        info.textContent = '[error] connection lost. EventSource will retry automatically.';
+    };
+})();
+</script>

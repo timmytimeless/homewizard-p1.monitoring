@@ -1,0 +1,35 @@
+@model aiterate.energy.web.Models.Account.HomeWizardTokenViewModel
+@{
+    ViewData["Title"] = "HomeWizard P1 token";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+@if (ViewData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="status">@statusMessage</div>
+}
+
+<div class="row">
+    <div class="col-md-5">
+        <form asp-action="HomeWizardToken" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="HomeWizardP1Token" class="form-label"></label>
+                <input asp-for="HomeWizardP1Token" type="password" class="form-control" autocomplete="off" placeholder="Enter a new token" />
+                <span asp-validation-for="HomeWizardP1Token" class="text-danger"></span>
+                @if (Model.HasHomeWizardP1Token)
+                {
+                    <div class="form-text">A token is already configured. Leave this field empty to keep it unchanged.</div>
+                }
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,150 @@
+@{
+    ViewData["Title"] = "Insights - Energie";
+}
+
+<h1 class="text-warning">Realtime Insights</h1>
+<p class="text-success">Live grafiek van actueel vermogen.</p>
+
+<div id="currentPower" style="font-size:2rem; font-weight:700; margin:8px 0; color:#222;">
+    Actueel vermogen: <span id="currentPowerValue">—</span> <span style="font-size:0.8rem; font-weight:400;">W</span>
+</div>
+
+<div style="height:40vh; max-height:400px; min-height:200px;">
+    <canvas id="energyChart" style="width:100%; height:100%;"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+    const ctx = document.getElementById('energyChart').getContext('2d');
+
+    const data = {
+        labels: [], // ISO timestamps
+        datasets: [{
+            label: 'Actueel vermogen (W)',
+            data: [],
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.15)',
+            tension: 0,
+            pointRadius: 0,
+            borderWidth: 2,
+            fill: true,
+        }]
+    };
+
+    const config = {
+        type: 'line',
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: false },
+                    ticks: {
+                        callback: function(value, index, ticks) {
+                            try {
+                                // value may be a numeric index; prefer reading from the chart's labels array
+                                const labels = (this && this.chart && this.chart.data && this.chart.data.labels) ? this.chart.data.labels : null;
+                                const raw = labels ? (labels[value] !== undefined ? labels[value] : labels[index]) : value;
+                                const dt = new Date(raw);
+                                if (isNaN(dt)) return '';
+                                // show label only every 5 seconds
+                                const s = dt.getSeconds();
+                                if (s % 5 === 0) return dt.toLocaleTimeString();
+                                return '';
+                            } catch (e) { return ''; }
+                        }
+                    }
+                },
+                y: { display: true, title: { display: true, text: 'W' } }
+            },
+            plugins: {
+                legend: { display: true },
+                decimation: { enabled: true, algorithm: 'lttb', samples: 50 }
+            }
+        }
+    };
+
+    const chart = new Chart(ctx, config);
+
+    // Connect to SSE stream
+    if (!window.EventSource) {
+        alert('EventSource niet ondersteund in deze browser.');
+        return;
+    }
+
+    const es = new EventSource('/stream');
+
+    function pushPoint(timestampIso, value) {
+        data.labels.push(timestampIso);
+        data.datasets[0].data.push(value);
+        // keep last 120 points (rolling window)
+        if (data.labels.length > 120) {
+            data.labels.shift();
+            data.datasets[0].data.shift();
+        }
+
+        // Dynamic Y-axis scaling with hard bounds at +/-12000
+        try {
+            const arr = data.datasets[0].data.map(Number).filter(v => !isNaN(v));
+            if (arr.length > 0) {
+                const minVal = Math.min(...arr);
+                const maxVal = Math.max(...arr);
+                const range = Math.max(1, maxVal - minVal);
+                const padding = Math.max(10, Math.ceil(range * 0.10)); // 10% padding, at least 10
+                let yMin = Math.max(-12000, Math.floor(minVal - padding));
+                let yMax = Math.min(12000, Math.ceil(maxVal + padding));
+                // If min and max are equal, expand small amount for visibility
+                if (yMin === yMax) {
+                    yMin = Math.max(-12000, yMin - 10);
+                    yMax = Math.min(12000, yMax + 10);
+                }
+                chart.options.scales.y.min = yMin;
+                chart.options.scales.y.max = yMax;
+            }
+        } catch (err) {
+            // ignore scaling errors
+        }
+
+        chart.update('none');
+    }
+
+    es.onmessage = function(e) {
+        let raw = e.data;
+        let parsed = null;
+        try { parsed = JSON.parse(raw); } catch {}
+
+        if (!parsed && typeof raw === 'string') {
+            const m = raw.match(/\{[\s\S]*\}/);
+            if (m) {
+                try { parsed = JSON.parse(m[0]); } catch {}
+            }
+        }
+
+        if (!parsed) return;
+
+        if (parsed.type === 'measurement' && parsed.data) {
+            const d = parsed.data;
+            // value may be snake_case or PascalCase depending on serialization
+            const val = (d.power_w !== undefined) ? d.power_w : (d.PowerW !== undefined ? d.PowerW : null);
+            const ts = d.timestamp || d.Timestamp || new Date().toISOString();
+            if (val !== null && !isNaN(Number(val))) {
+                const tsIso = new Date(ts).toISOString();
+                // update prominent current value display
+                try {
+                    const el = document.getElementById('currentPowerValue');
+                    if (el) el.textContent = Number(val).toLocaleString(undefined, {maximumFractionDigits:0});
+                } catch(e) { /* ignore */ }
+                pushPoint(tsIso, Number(val));
+            }
+        }
+    };
+
+    es.onerror = function(e) {
+        console.warn('SSE connection error', e);
+    };
+})();
+</script>

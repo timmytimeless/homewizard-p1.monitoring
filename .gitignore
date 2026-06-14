@@ -1,0 +1,16 @@
+bin/
+obj/
+/packages/
+.tools/
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+*.DotSettings.user
+*.local.sh
+*.local.command
+docker-compose.local.yml
+homewizard.crt
+riderModule.iml
+/_ReSharper.Caches/

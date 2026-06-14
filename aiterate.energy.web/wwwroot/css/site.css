@@ -1,0 +1,57 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+.navbar .navbar-nav {
+  align-items: center;
+}
+
+.navbar .nav-link,
+.navbar .navbar-text {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.navbar .btn.nav-link {
+  border: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  text-decoration: none;
+}
+
+.navbar form {
+  display: flex;
+  align-items: center;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+  color: var(--bs-secondary-color);
+  text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+  text-align: start;
+}

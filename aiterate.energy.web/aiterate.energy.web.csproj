@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>b0730490-aa5e-4d95-a98f-50c51b29e0b2</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
+      <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="Dockerfile" />
+      <Content Include="Dockerfile">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="../.env.example" Link="Deployment/.env.example" />
+      <None Include="../deploy-to-nas.example.sh" Link="Deployment/deploy-to-nas.example.sh" />
+      <None Include="../docker-compose.example.yml" Link="Deployment/docker-compose.example.yml" />
+      <None Include="../deploy/nas/README.md" Link="Deployment/nas/README.md" />
+      <None Include="../deploy/nas/production.env.example" Link="Deployment/nas/production.env.example" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Program.cs">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </Compile>
+    </ItemGroup>
+
+</Project>
