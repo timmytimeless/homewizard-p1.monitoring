@@ -37,13 +37,20 @@ public class HomeController(
     [HttpGet("stream")]
     public async Task Stream()
     {
-        Response.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
-        await Response.Body.FlushAsync();
-
         var envIp = configuration["HW_IP"] ?? "192.168.1.32";
         var currentUser = await userManager.GetUserAsync(User);
-        var token = homeWizardTokenProtector.Unprotect(currentUser?.HomeWizardP1Token);
+        string? token;
+        try
+        {
+            token = homeWizardTokenProtector.Unprotect(currentUser?.HomeWizardP1Token);
+        }
+        catch (CryptographicException ex)
+        {
+            Console.WriteLine($"[Stream] Failed to decrypt HomeWizard P1 token: {ex.Message}");
+            await WriteStreamErrorAsync("The stored HomeWizard P1 token can no longer be decrypted. Save the token again in your account settings.");
+            return;
+        }
+
         if (currentUser != null
             && !string.IsNullOrWhiteSpace(currentUser.HomeWizardP1Token)
             && !homeWizardTokenProtector.IsProtected(currentUser.HomeWizardP1Token))
@@ -52,9 +59,12 @@ public class HomeController(
             await userManager.UpdateAsync(currentUser);
         }
 
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        await Response.Body.FlushAsync();
+
         if (string.IsNullOrWhiteSpace(token))
         {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
             var missingToken = JsonSerializer.Serialize(new
             {
                 error = "HomeWizard P1 token is not configured for this user."
@@ -128,73 +138,110 @@ public class HomeController(
 
             await ws.ConnectAsync(uri, HttpContext.RequestAborted);
 
+            var buffer = new byte[8192];
+            var sb = new StringBuilder();
+
+            async Task<string?> ReceiveBackendMessageAsync()
+            {
+                sb.Clear();
+                while (!HttpContext.RequestAborted.IsCancellationRequested && ws.State == WebSocketState.Open)
+                {
+                    var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), HttpContext.RequestAborted);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "closing", CancellationToken.None);
+                        return null;
+                    }
+
+                    sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    if (result.EndOfMessage)
+                    {
+                        return sb.ToString();
+                    }
+                }
+
+                return null;
+            }
+
+            async Task ForwardBackendMessageAsync(string msg)
+            {
+                // Try to parse incoming backend message and deserialize measurement payload server-side.
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(msg);
+                    if (doc.RootElement.TryGetProperty("type", out var typeEl) && typeEl.GetString() == "measurement" && doc.RootElement.TryGetProperty("data", out var dataEl))
+                    {
+                        var measurement = System.Text.Json.JsonSerializer.Deserialize<HomeWizardMeasurement>(dataEl.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                        var labels = new Dictionary<string, string>();
+                        foreach (var prop in typeof(HomeWizardMeasurement).GetProperties())
+                        {
+                            var jsonAttr = prop.GetCustomAttributes(typeof(JsonPropertyNameAttribute), false).FirstOrDefault() as JsonPropertyNameAttribute;
+                            var displayAttr = prop.GetCustomAttributes(typeof(DisplayAttribute), false).FirstOrDefault() as DisplayAttribute;
+                            var key = jsonAttr != null ? jsonAttr.Name : prop.Name;
+                            var label = displayAttr?.Name ?? prop.Name;
+                            labels[key] = label;
+                        }
+
+                        var payload = new { type = "measurement", data = measurement, labels };
+                        var ssePayload = "data: " + JsonSerializer.Serialize(payload) + "\n\n";
+                        await Response.WriteAsync(ssePayload);
+                        await Response.Body.FlushAsync();
+                        return;
+                    }
+                }
+                catch
+                {
+                    // fall back to forwarding raw message
+                }
+
+                var sse = "data: " + msg.Replace("\n", "\ndata: ") + "\n\n";
+                await Response.WriteAsync(sse);
+                await Response.Body.FlushAsync();
+            }
+
+            var authorizationRequest = await ReceiveBackendMessageAsync();
+            if (authorizationRequest != null)
+            {
+                await ForwardBackendMessageAsync(authorizationRequest);
+            }
+
             // Authorize
             var auth = $"{{\"type\":\"authorization\",\"data\":\"{token}\"}}";
             await ws.SendAsync(Encoding.UTF8.GetBytes(auth), WebSocketMessageType.Text, true, HttpContext.RequestAborted);
+
+            var authorizationResponse = await ReceiveBackendMessageAsync();
+            if (authorizationResponse != null)
+            {
+                await ForwardBackendMessageAsync(authorizationResponse);
+            }
 
             // Subscribe to measurement
             var sub = "{\"type\":\"subscribe\",\"data\":\"measurement\"}";
             await ws.SendAsync(Encoding.UTF8.GetBytes(sub), WebSocketMessageType.Text, true, HttpContext.RequestAborted);
 
-            var buffer = new byte[8192];
-            var sb = new StringBuilder();
-
             while (!HttpContext.RequestAborted.IsCancellationRequested && ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), HttpContext.RequestAborted);
-                if (result.MessageType == WebSocketMessageType.Close)
+                var msg = await ReceiveBackendMessageAsync();
+                if (msg == null)
                 {
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "closing", CancellationToken.None);
                     break;
                 }
 
-                sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-                if (result.EndOfMessage)
-                {
-                    var msg = sb.ToString();
-                    sb.Clear();
-
-                    // Try to parse incoming backend message and deserialize measurement payload server-side
-                    try
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(msg);
-                        if (doc.RootElement.TryGetProperty("type", out var typeEl) && typeEl.GetString() == "measurement" && doc.RootElement.TryGetProperty("data", out var dataEl))
-                        {
-                            // Deserialize into typed model
-                            var measurement = System.Text.Json.JsonSerializer.Deserialize<HomeWizardMeasurement>(dataEl.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                            // Build labels map from model attributes
-                            var labels = new Dictionary<string, string>();
-                            foreach (var prop in typeof(HomeWizardMeasurement).GetProperties())
-                            {
-                                var jsonAttr = prop.GetCustomAttributes(typeof(JsonPropertyNameAttribute), false).FirstOrDefault() as JsonPropertyNameAttribute;
-                                var displayAttr = prop.GetCustomAttributes(typeof(DisplayAttribute), false).FirstOrDefault() as DisplayAttribute;
-                                var key = jsonAttr != null ? jsonAttr.Name : prop.Name;
-                                var label = displayAttr != null ? displayAttr.Name : prop.Name;
-                                labels[key] = label;
-                            }
-
-                            var payload = new { type = "measurement", data = measurement, labels };
-                            var ssePayload = "data: " + JsonSerializer.Serialize(payload) + "\n\n";
-                            await Response.WriteAsync(ssePayload);
-                            await Response.Body.FlushAsync();
-                            continue;
-                        }
-                    }
-                    catch
-                    {
-                        // fall back to forwarding raw message
-                    }
-
-                    var sse = "data: " + msg.Replace("\n", "\ndata: ") + "\n\n";
-                    await Response.WriteAsync(sse);
-                    await Response.Body.FlushAsync();
-                }
+                await ForwardBackendMessageAsync(msg);
             }
         }
         catch (Exception ex)
         {
-            var err = $"data: {{\"error\":\"{ex.Message}\"}}\n\n";
+            var closeStatus = ws.CloseStatus?.ToString();
+            var closeDescription = ws.CloseStatusDescription;
+            Console.WriteLine($"[Stream] WebSocket error: {ex.Message}; closeStatus={closeStatus}; closeDescription={closeDescription}");
+            var err = "data: " + JsonSerializer.Serialize(new
+            {
+                error = ex.Message,
+                close_status = closeStatus,
+                close_description = closeDescription
+            }) + "\n\n";
             try
             {
                 await Response.WriteAsync(err);
@@ -224,13 +271,24 @@ public class HomeController(
 
             try
             {
-                wsManager?.Unregister(ws);
+                if (ws is not null)
+                {
+                    wsManager!.Unregister(ws);
+                }
             }
             catch
             {
                 // ignore unregister errors
             }
         }
+    }
+
+    private async Task WriteStreamErrorAsync(string error)
+    {
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        await Response.WriteAsync("data: " + JsonSerializer.Serialize(new { error }) + "\n\n");
+        await Response.Body.FlushAsync();
     }
 
     private static bool IsTrustedHomeWizardCertificate(
