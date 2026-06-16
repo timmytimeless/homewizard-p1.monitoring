@@ -1,5 +1,6 @@
 using aiterate.energy.web.Models.Account;
 using aiterate.energy.web.Models.Identity;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -111,7 +112,14 @@ public class AccountController(
             return Challenge();
         }
 
-        await EncryptLegacyHomeWizardToken(user);
+        if (!await TryEncryptLegacyHomeWizardToken(user))
+        {
+            return View(new HomeWizardTokenViewModel
+            {
+                HasHomeWizardP1Token = false,
+                TokenNeedsReplacement = true
+            });
+        }
 
         return View(new HomeWizardTokenViewModel { HasHomeWizardP1Token = !string.IsNullOrWhiteSpace(user.HomeWizardP1Token) });
     }
@@ -162,14 +170,28 @@ public class AccountController(
         return RedirectToAction(nameof(HomeController.Index), "Home");
     }
 
-    private async Task EncryptLegacyHomeWizardToken(ApplicationUser user)
+    private async Task<bool> TryEncryptLegacyHomeWizardToken(ApplicationUser user)
     {
-        if (string.IsNullOrWhiteSpace(user.HomeWizardP1Token) || homeWizardTokenProtector.IsProtected(user.HomeWizardP1Token))
+        if (string.IsNullOrWhiteSpace(user.HomeWizardP1Token))
         {
-            return;
+            return true;
+        }
+
+        if (homeWizardTokenProtector.IsProtected(user.HomeWizardP1Token))
+        {
+            try
+            {
+                _ = homeWizardTokenProtector.Unprotect(user.HomeWizardP1Token);
+                return true;
+            }
+            catch (CryptographicException)
+            {
+                return false;
+            }
         }
 
         user.HomeWizardP1Token = homeWizardTokenProtector.Protect(user.HomeWizardP1Token);
         await userManager.UpdateAsync(user);
+        return true;
     }
 }

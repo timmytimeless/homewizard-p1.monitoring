@@ -9,4 +9,6 @@ public class HomeWizardTokenViewModel
     public string? HomeWizardP1Token { get; set; }
 
     public bool HasHomeWizardP1Token { get; set; }
+
+    public bool TokenNeedsReplacement { get; set; }
 }

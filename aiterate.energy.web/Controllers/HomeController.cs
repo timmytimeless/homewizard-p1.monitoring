@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Net.WebSockets;
-using System.Net.Security;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
@@ -13,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using aiterate.energy.web.Models;
 using aiterate.energy.web.Models.Identity;
 using aiterate.energy.web.Services;
+using aiterate.energy.web.Services.HomeWizard;
 
 namespace aiterate.energy.web.Controllers;
 
@@ -109,7 +108,7 @@ public class HomeController(
         if (!string.IsNullOrWhiteSpace(pinnedCertificateSha256))
         {
             ws.Options.RemoteCertificateValidationCallback =
-                (_, certificate, _, sslPolicyErrors) => IsTrustedHomeWizardCertificate(certificate, sslPolicyErrors, pinnedCertificateSha256);
+                (_, certificate, _, sslPolicyErrors) => HomeWizardCertificateValidator.IsTrustedCertificate(certificate, sslPolicyErrors, pinnedCertificateSha256);
         }
 
         // Register connection so it can be closed on application shutdown
@@ -289,42 +288,6 @@ public class HomeController(
         Response.Headers.CacheControl = "no-cache";
         await Response.WriteAsync("data: " + JsonSerializer.Serialize(new { error }) + "\n\n");
         await Response.Body.FlushAsync();
-    }
-
-    private static bool IsTrustedHomeWizardCertificate(
-        X509Certificate? certificate,
-        SslPolicyErrors sslPolicyErrors,
-        string pinnedCertificateSha256)
-    {
-        if (sslPolicyErrors == SslPolicyErrors.None)
-        {
-            return true;
-        }
-
-        if (certificate == null)
-        {
-            return false;
-        }
-
-        using var certificate2 = new X509Certificate2(certificate);
-        var actualFingerprint = certificate2.GetCertHashString(HashAlgorithmName.SHA256);
-        var expectedFingerprint = NormalizeFingerprint(pinnedCertificateSha256);
-        if (actualFingerprint.Length != expectedFingerprint.Length)
-        {
-            return false;
-        }
-
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.ASCII.GetBytes(actualFingerprint),
-            Encoding.ASCII.GetBytes(expectedFingerprint));
-    }
-
-    private static string NormalizeFingerprint(string fingerprint)
-    {
-        return fingerprint
-            .Replace(":", string.Empty, StringComparison.Ordinal)
-            .Replace(" ", string.Empty, StringComparison.Ordinal)
-            .ToUpperInvariant();
     }
 
     [HttpGet("insights")]

@@ -7,10 +7,10 @@ must live in a persistent folder that is not wiped.
 
 ## One-Time NAS Setup
 
-Create a persistent environment folder on the NAS:
+Create persistent environment and Data Protection key folders on the NAS:
 
 ```bash
-mkdir -p /volume1/docker/aiterate-energy/env
+mkdir -p /volume1/docker/aiterate-energy/env /volume1/docker/aiterate-energy/data-protection-keys
 chmod 700 /volume1/docker/aiterate-energy/env
 ```
 
@@ -59,6 +59,7 @@ So redeploying new files does not require entering environment variables again.
 ```text
 ASPNETCORE_ENVIRONMENT=Production
 ASPNETCORE_URLS=http://+:3000
+DataProtection__KeysPath=/var/aiterate-energy/data-protection-keys
 ConnectionStrings__Identity=Server=<db-host>;Port=3306;Database=<db>;User=<app-user>;Password=<password>;
 MariaDb__ServerVersion=10.11.0
 HW_IP=<homewizard-ip>
@@ -67,3 +68,23 @@ HomeWizard__CertificateSha256=<homewizard-cert-sha256>
 ```
 
 Use a dedicated MariaDB application user, not `root`.
+
+`DataProtection__KeysPath` must point to the mounted
+`/var/aiterate-energy/data-protection-keys` directory. The files in that
+directory are required to decrypt the stored HomeWizard P1 token after a
+container restart or redeploy.
+
+## HTTPS
+
+Keep the Docker container on internal HTTP port `3000` and terminate HTTPS in
+Synology's reverse proxy or another proxy in front of Docker.
+
+Configure the proxy to forward:
+
+```text
+https://energy.aiterate.nl -> http://127.0.0.1:3000
+```
+
+The app trusts the proxy's `X-Forwarded-Proto`, `X-Forwarded-For`, and
+`X-Forwarded-Host` headers in production, so generated URLs, secure cookies,
+HSTS, and request HTTPS detection work correctly behind the proxy.

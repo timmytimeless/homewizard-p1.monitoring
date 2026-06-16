@@ -1,11 +1,11 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
 using aiterate.energy.web.Data;
 using aiterate.energy.web.Models.Identity;
 using aiterate.energy.web.Services;
+using aiterate.energy.web.Services.HomeWizard;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -93,7 +93,12 @@ var dataProtectionBuilder = builder.Services
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 {
+    Directory.CreateDirectory(dataProtectionKeysPath);
     dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+else if (!builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException("DataProtection:KeysPath must be configured in production so encrypted tokens survive container restarts.");
 }
 
 // Add services to the container.
@@ -123,10 +128,46 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.LogoutPath = "/Account/Logout";
     options.AccessDeniedPath = "/Account/AccessDenied";
+
+    if (!builder.Environment.IsDevelopment())
+    {
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    }
 });
+
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto |
+            ForwardedHeaders.XForwardedHost;
+
+        // Synology's reverse proxy is expected to be the only public entry point.
+        // Accept its forwarded headers even though its Docker bridge IP can vary.
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+}
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddSingleton<IHomeWizardTokenProtector, HomeWizardTokenProtector>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.Configure<HomeWizardCollectorOptions>(builder.Configuration.GetSection("HomeWizardCollector"));
+builder.Services.AddHttpClient(nameof(HomeWizardMeasurementCollectorService))
+    .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+    {
+        var config = serviceProvider.GetRequiredService<IConfiguration>();
+        var pinnedCertificateSha256 = config["HomeWizard:CertificateSha256"];
+
+        return new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (_, certificate, _, sslPolicyErrors) =>
+                HomeWizardCertificateValidator.IsTrustedCertificate(certificate, sslPolicyErrors, pinnedCertificateSha256)
+        };
+    });
+builder.Services.AddHostedService<HomeWizardMeasurementCollectorService>();
 // Register WebSocket connection manager to ensure active backend WS connections can be closed on shutdown
 builder.Services.AddSingleton<aiterate.energy.web.Services.WebSocketConnectionManager>();
 
@@ -151,6 +192,7 @@ lifetime.ApplicationStopping.Register(() =>
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
+    app.UseForwardedHeaders();
     app.UseHsts();
 }
 

@@ -12,7 +12,5 @@ services:
       - "${APP_PORT:-3000}:3000"
     env_file:
       - ${AITERATE_ENV_FILE:-./deploy/nas/production.env.example}
-    environment:
-      DataProtection__KeysPath: /var/aiterate-energy/data-protection-keys
     volumes:
       - ${AITERATE_DATA_PROTECTION_KEYS_DIR:-./data-protection-keys}:/var/aiterate-energy/data-protection-keys

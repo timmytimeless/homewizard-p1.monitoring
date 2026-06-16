@@ -12,5 +12,6 @@ obj/
 *.local.command
 docker-compose.local.yml
 homewizard.crt
+.data-protection-keys/
 riderModule.iml
 /_ReSharper.Caches/

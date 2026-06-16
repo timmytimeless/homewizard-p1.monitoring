@@ -10,6 +10,13 @@
     <div class="alert alert-success" role="status">@statusMessage</div>
 }
 
+@if (Model.TokenNeedsReplacement)
+{
+    <div class="alert alert-warning" role="alert">
+        The stored token can no longer be decrypted. Enter the HomeWizard P1 token again to replace it.
+    </div>
+}
+
 <div class="row">
     <div class="col-md-5">
         <form asp-action="HomeWizardToken" method="post">
