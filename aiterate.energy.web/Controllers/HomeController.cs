@@ -1,13 +1,16 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using aiterate.energy.web.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using aiterate.energy.web.Models;
 using aiterate.energy.web.Models.Identity;
 using aiterate.energy.web.Services;
@@ -19,6 +22,7 @@ namespace aiterate.energy.web.Controllers;
 public class HomeController(
     WebSocketConnectionManager wsManager,
     UserManager<ApplicationUser> userManager,
+    ApplicationDbContext dbContext,
     IConfiguration configuration,
     IHomeWizardTokenProtector homeWizardTokenProtector) : Controller
 {
@@ -294,5 +298,64 @@ public class HomeController(
     public IActionResult Insights()
     {
         return View();
+    }
+
+    [HttpGet("p1-reporting")]
+    public IActionResult P1Reporting()
+    {
+        return View();
+    }
+
+    [HttpGet("p1-reporting/data")]
+    public async Task<IActionResult> P1ReportingData([FromQuery] string? date)
+    {
+        var selectedDate = DateOnly.FromDateTime(DateTime.Today);
+        if (!string.IsNullOrWhiteSpace(date)
+            && !DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out selectedDate))
+        {
+            return BadRequest("Date must be formatted as yyyy-MM-dd.");
+        }
+
+        var dayStart = selectedDate.ToDateTime(TimeOnly.MinValue);
+        var nextDay = dayStart.AddDays(1);
+
+        var aggregates = await dbContext.HomeWizardQuarterHourAggregates
+            .AsNoTracking()
+            .Where(aggregate => aggregate.PeriodStart >= dayStart && aggregate.PeriodStart < nextDay)
+            .Select(aggregate => new
+            {
+                aggregate.PeriodStart,
+                aggregate.EnergyImportKwh,
+                aggregate.IsReliable
+            })
+            .ToListAsync();
+
+        var aggregatesByPeriod = aggregates
+            .GroupBy(aggregate => aggregate.PeriodStart)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var buckets = Enumerable.Range(0, 96)
+            .Select(index =>
+            {
+                var periodStart = dayStart.AddMinutes(index * 15);
+                var hasData = aggregatesByPeriod.TryGetValue(periodStart, out var aggregate);
+
+                return new
+                {
+                    label = periodStart.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    periodStart = periodStart.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture),
+                    consumptionKwh = hasData ? aggregate!.EnergyImportKwh : (decimal?)null,
+                    hasData,
+                    isReliable = hasData && aggregate!.IsReliable
+                };
+            })
+            .ToList();
+
+        return Json(new
+        {
+            date = selectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            totalConsumptionKwh = aggregates.Sum(aggregate => aggregate.EnergyImportKwh),
+            buckets
+        });
     }
 }

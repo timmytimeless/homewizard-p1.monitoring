@@ -1,0 +1,168 @@
+@{
+    ViewData["Title"] = "P1 Reporting";
+}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+    <div>
+        <h1 class="h3 mb-1">P1 Reporting</h1>
+        <div class="text-muted">Daily power consumption</div>
+    </div>
+    <div class="d-flex align-items-end gap-3">
+        <div>
+            <div class="form-label">Day</div>
+            <div class="btn-group" role="group" aria-label="Report day navigation">
+                <button id="previousDay" type="button" class="btn btn-outline-secondary">Previous</button>
+                <button id="selectedDay" type="button" class="btn btn-outline-secondary" disabled></button>
+                <button id="nextDay" type="button" class="btn btn-outline-secondary">Next</button>
+            </div>
+        </div>
+        <div>
+            <div class="form-label">Total</div>
+            <div id="dailyTotal" class="fs-5 fw-semibold">0.000 kWh</div>
+        </div>
+    </div>
+</div>
+
+<div style="height:55vh; min-height:320px;">
+    <canvas id="dailyConsumptionChart" style="width:100%; height:100%;"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const previousDay = document.getElementById('previousDay');
+    const selectedDay = document.getElementById('selectedDay');
+    const nextDay = document.getElementById('nextDay');
+    const dailyTotal = document.getElementById('dailyTotal');
+    const chartCanvas = document.getElementById('dailyConsumptionChart');
+    const today = new Date();
+    let activeDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    function toDateKey(date) {
+        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+        return localDate.toISOString().slice(0, 10);
+    }
+
+    function setSelectedDayText(date) {
+        selectedDay.textContent = date.toLocaleDateString(undefined, {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+
+    function moveDay(offset) {
+        activeDate = new Date(activeDate.getFullYear(), activeDate.getMonth(), activeDate.getDate() + offset);
+        setSelectedDayText(activeDate);
+        loadReport(toDateKey(activeDate)).catch(error => {
+            console.error(error);
+        });
+    }
+
+    const chart = new Chart(chartCanvas, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Consumption (kWh)',
+                data: [],
+                backgroundColor: 'rgba(25, 135, 84, 0.75)',
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1,
+                stack: 'energy'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    ticks: {
+                        autoSkip: false,
+                        maxRotation: 0,
+                        callback: function (value, index) {
+                            const label = this.getLabelForValue(value);
+                            return index % 4 === 0 ? label : '';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'kWh'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const bucket = context.raw;
+                            if (!bucket || bucket.y === null) {
+                                return 'Consumption: no data';
+                            }
+
+                            return `Consumption: ${bucket.y.toFixed(3)} kWh`;
+                        },
+                        afterLabel: function (context) {
+                            const bucket = context.raw;
+                            if (bucket && bucket.hasData && !bucket.isReliable) {
+                                return 'Marked unreliable';
+                            }
+
+                            return '';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    async function loadReport(date) {
+        const response = await fetch(`/p1-reporting/data?date=${encodeURIComponent(date)}`);
+        if (!response.ok) {
+            throw new Error(`Daily report request failed with HTTP ${response.status}`);
+        }
+
+        const report = await response.json();
+        chart.data.labels = report.buckets.map(bucket => bucket.label);
+        chart.data.datasets[0].data = report.buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.consumptionKwh,
+            hasData: bucket.hasData,
+            isReliable: bucket.isReliable
+        }));
+        dailyTotal.textContent = `${Number(report.totalConsumptionKwh).toFixed(3)} kWh`;
+        chart.update();
+    }
+
+    previousDay.addEventListener('click', function () {
+        moveDay(-1);
+    });
+
+    nextDay.addEventListener('click', function () {
+        moveDay(1);
+    });
+
+    setSelectedDayText(activeDate);
+    loadReport(toDateKey(activeDate)).catch(error => {
+        console.error(error);
+    });
+})();
+</script>
