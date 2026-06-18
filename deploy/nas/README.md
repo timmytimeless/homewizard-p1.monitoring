@@ -65,6 +65,11 @@ MariaDb__ServerVersion=10.11.0
 HW_IP=<homewizard-ip>
 HW_SCHEME=wss
 HomeWizard__CertificateSha256=<homewizard-cert-sha256>
+HomeWizardCollector__Scheme=https
+HomeWizardCollector__Host=<homewizard-ip>
+HomeWizardCollector__PollIntervalSeconds=60
+HomeWizardCollector__BucketMinutes=15
+HomeWizardCollector__Token=<homewizard-p1-token>
 ```
 
 Use a dedicated MariaDB application user, not `root`.
@@ -73,6 +78,24 @@ Use a dedicated MariaDB application user, not `root`.
 `/var/aiterate-energy/data-protection-keys` directory. The files in that
 directory are required to decrypt the stored HomeWizard P1 token after a
 container restart or redeploy.
+
+## Collector
+
+Docker Compose starts two containers:
+
+- `web`: MVC UI and reporting.
+- `collector`: dedicated .NET Worker Service that polls the HomeWizard P1 meter
+  and writes `HomeWizardQuarterHourAggregates`.
+
+The compose file explicitly disables `HomeWizardCollector` in the web container
+and enables it in the collector container. Keep only one collector container
+running for a single P1 meter, otherwise multiple processes may try to update
+the same 15-minute aggregate row.
+
+Prefer configuring `HomeWizardCollector__Token` in the NAS environment file for
+the worker. If it is omitted, the collector can fall back to the token stored in
+`AspNetUsers.HomeWizardP1Token`, but then the worker must share the same
+Data Protection keys as the web app.
 
 ## HTTPS
 

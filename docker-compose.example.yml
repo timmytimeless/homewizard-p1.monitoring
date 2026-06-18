@@ -12,5 +12,21 @@ services:
       - "${APP_PORT:-3000}:3000"
     env_file:
       - ${AITERATE_ENV_FILE:-./deploy/nas/production.env.example}
+    environment:
+      HomeWizardCollector__Enabled: "false"
+    volumes:
+      - ${AITERATE_DATA_PROTECTION_KEYS_DIR:-./data-protection-keys}:/var/aiterate-energy/data-protection-keys
+
+  collector:
+    build:
+      context: .
+      dockerfile: aiterate.energy.collector/Dockerfile
+    image: aiterate.energy.collector:latest
+    container_name: ${COLLECTOR_CONTAINER_NAME:-aiterate-energy-collector}
+    restart: unless-stopped
+    env_file:
+      - ${AITERATE_ENV_FILE:-./deploy/nas/production.env.example}
+    environment:
+      HomeWizardCollector__Enabled: "true"
     volumes:
       - ${AITERATE_DATA_PROTECTION_KEYS_DIR:-./data-protection-keys}:/var/aiterate-energy/data-protection-keys

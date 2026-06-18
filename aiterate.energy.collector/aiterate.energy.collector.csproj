@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>b0730490-aa5e-4d95-a98f-50c51b29e0b2</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+        <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="../aiterate.energy.web/Data/ApplicationDbContext.cs" Link="Data/ApplicationDbContext.cs" />
+        <Compile Include="../aiterate.energy.web/Models/HomeWizardMeasurement.cs" Link="Models/HomeWizardMeasurement.cs" />
+        <Compile Include="../aiterate.energy.web/Models/Identity/ApplicationUser.cs" Link="Models/Identity/ApplicationUser.cs" />
+        <Compile Include="../aiterate.energy.web/Models/Persistence/HomeWizardQuarterHourAggregate.cs" Link="Models/Persistence/HomeWizardQuarterHourAggregate.cs" />
+        <Compile Include="../aiterate.energy.web/Services/HomeWizard/HomeWizardAggregateUpdater.cs" Link="Services/HomeWizard/HomeWizardAggregateUpdater.cs" />
+        <Compile Include="../aiterate.energy.web/Services/HomeWizard/HomeWizardCertificateValidator.cs" Link="Services/HomeWizard/HomeWizardCertificateValidator.cs" />
+        <Compile Include="../aiterate.energy.web/Services/HomeWizard/HomeWizardCollectorOptions.cs" Link="Services/HomeWizard/HomeWizardCollectorOptions.cs" />
+        <Compile Include="../aiterate.energy.web/Services/HomeWizard/HomeWizardMeasurementCollectorService.cs" Link="Services/HomeWizard/HomeWizardMeasurementCollectorService.cs" />
+        <Compile Include="../aiterate.energy.web/Services/HomeWizard/HomeWizardTimestampParser.cs" Link="Services/HomeWizard/HomeWizardTimestampParser.cs" />
+        <Compile Include="../aiterate.energy.web/Services/HomeWizardTokenProtector.cs" Link="Services/HomeWizardTokenProtector.cs" />
+    </ItemGroup>
+
+</Project>

@@ -60,6 +60,11 @@ MariaDb__ServerVersion=10.11.0
 HW_IP=<homewizard-ip>
 HW_SCHEME=wss
 HomeWizard__CertificateSha256=<sha256-fingerprint>
+HomeWizardCollector__Scheme=https
+HomeWizardCollector__Host=<homewizard-ip>
+HomeWizardCollector__PollIntervalSeconds=60
+HomeWizardCollector__BucketMinutes=15
+HomeWizardCollector__Token=<homewizard-p1-token>
 ```
 
 Use a dedicated MariaDB user with only the privileges this app needs for its
@@ -68,6 +73,11 @@ database. Do not use `root` for the application connection.
 Keep `DataProtection__KeysPath` on the mounted persistent key directory. Without
 those key files, encrypted values such as the HomeWizard P1 token cannot be
 decrypted after a container restart or redeploy.
+
+Docker Compose runs collection in a dedicated `aiterate.energy.collector`
+worker container. The web container has `HomeWizardCollector__Enabled=false`;
+the collector container has `HomeWizardCollector__Enabled=true`. Keep a single
+collector instance running for the single HomeWizard P1 meter.
 
 For each redeployment from your Mac, set your own deployment values and run:
 

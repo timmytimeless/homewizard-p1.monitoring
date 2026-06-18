@@ -1,5 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "aiterate.energy.web", "aiterate.energy.web\aiterate.energy.web.csproj", "{7673646A-27E3-4461-B27C-85971CC49FB0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deployment", "Deployment", "{F08A5EA1-2F33-49D8-9E17-0F1EAA17D3AD}"
@@ -11,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deployment", "Deployment", 
 		deploy\nas\production.env.example = deploy\nas\production.env.example
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "aiterate.energy.collector", "aiterate.energy.collector\aiterate.energy.collector.csproj", "{35A62BB4-5309-4BFB-BF46-F1F68CF37ECE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,5 +24,9 @@ Global
 		{7673646A-27E3-4461-B27C-85971CC49FB0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7673646A-27E3-4461-B27C-85971CC49FB0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7673646A-27E3-4461-B27C-85971CC49FB0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{35A62BB4-5309-4BFB-BF46-F1F68CF37ECE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{35A62BB4-5309-4BFB-BF46-F1F68CF37ECE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{35A62BB4-5309-4BFB-BF46-F1F68CF37ECE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{35A62BB4-5309-4BFB-BF46-F1F68CF37ECE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
