@@ -8,7 +8,7 @@ COPY aiterate.energy.collector/ aiterate.energy.collector/
 COPY aiterate.energy.web/ aiterate.energy.web/
 RUN dotnet publish aiterate.energy.collector/aiterate.energy.collector.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/runtime:9.0
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
 WORKDIR /app
 COPY --from=build /app/publish .
