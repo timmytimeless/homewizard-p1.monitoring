@@ -12,8 +12,6 @@ services:
       - "${APP_PORT:-3000}:3000"
     env_file:
       - ${AITERATE_ENV_FILE:-./deploy/nas/production.env.example}
-    environment:
-      HomeWizardCollector__Enabled: "false"
     volumes:
       - ${AITERATE_DATA_PROTECTION_KEYS_DIR:-./data-protection-keys}:/var/aiterate-energy/data-protection-keys
 

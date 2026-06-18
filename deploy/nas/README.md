@@ -62,7 +62,7 @@ ASPNETCORE_URLS=http://+:3000
 DataProtection__KeysPath=/var/aiterate-energy/data-protection-keys
 ConnectionStrings__Identity=Server=<db-host>;Port=3306;Database=<db>;User=<app-user>;Password=<password>;
 MariaDb__ServerVersion=10.11.0
-HW_IP=<homewizard-ip>
+HomeWizard__Host=<homewizard-ip>
 HW_SCHEME=wss
 HomeWizard__CertificateSha256=<homewizard-cert-sha256>
 HomeWizardCollector__Scheme=https
@@ -83,12 +83,13 @@ container restart or redeploy.
 
 Docker Compose starts two containers:
 
-- `web`: MVC UI and reporting.
+- `web`: MVC UI, reporting, and realtime Raw Data/Insights display.
 - `collector`: dedicated .NET Worker Service that polls the HomeWizard P1 meter
   and writes `HomeWizardQuarterHourAggregates`.
 
-The compose file explicitly disables `HomeWizardCollector` in the web container
-and enables it in the collector container. Keep only one collector container
+The MVC web app does not register or run the background collector and must not
+write P1 measurements or aggregates to MariaDB. Docker Compose enables database
+collection only in the collector container. Keep only one collector container
 running for a single P1 meter, otherwise multiple processes may try to update
 the same 15-minute aggregate row.
 

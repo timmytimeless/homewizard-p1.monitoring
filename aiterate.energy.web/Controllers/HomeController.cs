@@ -40,7 +40,8 @@ public class HomeController(
     [HttpGet("stream")]
     public async Task Stream()
     {
-        var envIp = configuration["HW_IP"] ?? "192.168.1.32";
+        var configuredHost = configuration["HW_IP"]
+            ?? configuration["HomeWizard:Host"];
         var currentUser = await userManager.GetUserAsync(User);
         string? token;
         try
@@ -77,17 +78,18 @@ public class HomeController(
             return;
         }
 
-        // Determine API host to connect to. Prefer HW_IP if set, otherwise use the API project's default HTTP URL.
-        string host;
-        if (!string.IsNullOrEmpty(envIp))
+        if (string.IsNullOrWhiteSpace(configuredHost))
         {
-            host = envIp; // e.g. 192.168.1.32
+            var missingHost = JsonSerializer.Serialize(new
+            {
+                error = "HomeWizard host is not configured."
+            });
+            await Response.WriteAsync("data: " + missingHost + "\n\n");
+            await Response.Body.FlushAsync();
+            return;
         }
-        else
-        {
-            // Default to the API project's HTTP launch URL
-            host = "localhost:5172";
-        }
+
+        var host = configuredHost;
 
         // Determine scheme: allow override via HW_SCHEME (ws or wss) or HW_USE_TLS=1.
         // If not provided, derive from the incoming request (Request.IsHttps).
@@ -233,6 +235,10 @@ public class HomeController(
 
                 await ForwardBackendMessageAsync(msg);
             }
+        }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            Console.WriteLine("[Stream] Client disconnected.");
         }
         catch (Exception ex)
         {

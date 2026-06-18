@@ -37,6 +37,12 @@ public class HomeWizardMeasurementCollectorService(
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(_options.Host))
+        {
+            logger.LogError("HomeWizard collector is enabled, but HomeWizardCollector:Host is not configured.");
+            return;
+        }
+
         var interval = TimeSpan.FromSeconds(Math.Max(10, _options.PollIntervalSeconds));
         using var timer = new PeriodicTimer(interval);
 

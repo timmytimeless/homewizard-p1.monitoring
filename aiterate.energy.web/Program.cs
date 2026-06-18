@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using aiterate.energy.web.Data;
 using aiterate.energy.web.Models.Identity;
 using aiterate.energy.web.Services;
-using aiterate.energy.web.Services.HomeWizard;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -153,21 +152,6 @@ if (!builder.Environment.IsDevelopment())
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddSingleton<IHomeWizardTokenProtector, HomeWizardTokenProtector>();
-builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.Configure<HomeWizardCollectorOptions>(builder.Configuration.GetSection("HomeWizardCollector"));
-builder.Services.AddHttpClient(nameof(HomeWizardMeasurementCollectorService))
-    .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
-    {
-        var config = serviceProvider.GetRequiredService<IConfiguration>();
-        var pinnedCertificateSha256 = config["HomeWizard:CertificateSha256"];
-
-        return new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, certificate, _, sslPolicyErrors) =>
-                HomeWizardCertificateValidator.IsTrustedCertificate(certificate, sslPolicyErrors, pinnedCertificateSha256)
-        };
-    });
-builder.Services.AddHostedService<HomeWizardMeasurementCollectorService>();
 // Register WebSocket connection manager to ensure active backend WS connections can be closed on shutdown
 builder.Services.AddSingleton<aiterate.energy.web.Services.WebSocketConnectionManager>();
 

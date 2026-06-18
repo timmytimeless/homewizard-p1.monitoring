@@ -22,6 +22,17 @@ Apply migrations with the same environment variable set:
   --context ApplicationDbContext
 ```
 
+Store local HomeWizard settings in user secrets or environment variables, not
+in committed `appsettings*.json` files. `HomeWizard:Host` is used by the MVC app
+for Raw Data and Insights realtime display. `HomeWizardCollector:Host` is used
+by the worker app for database collection.
+
+```bash
+dotnet user-secrets set 'HomeWizard:Host' '<homewizard-ip>' --project aiterate.energy.web/aiterate.energy.web.csproj
+dotnet user-secrets set 'HomeWizardCollector:Host' '<homewizard-ip>' --project aiterate.energy.web/aiterate.energy.web.csproj
+dotnet user-secrets set 'HomeWizard:CertificateSha256' '<sha256-fingerprint>' --project aiterate.energy.web/aiterate.energy.web.csproj
+```
+
 ## Synology Docker Deployment Example
 
 The repeatable NAS deployment example uses `docker-compose.example.yml`,
@@ -57,7 +68,7 @@ ASPNETCORE_URLS=http://+:3000
 DataProtection__KeysPath=/var/aiterate-energy/data-protection-keys
 ConnectionStrings__Identity=Server=<nas-or-db-host>;Port=3306;Database=<database>;User=<app-user>;Password=<password>;
 MariaDb__ServerVersion=10.11.0
-HW_IP=<homewizard-ip>
+HomeWizard__Host=<homewizard-ip>
 HW_SCHEME=wss
 HomeWizard__CertificateSha256=<sha256-fingerprint>
 HomeWizardCollector__Scheme=https
@@ -75,9 +86,12 @@ those key files, encrypted values such as the HomeWizard P1 token cannot be
 decrypted after a container restart or redeploy.
 
 Docker Compose runs collection in a dedicated `aiterate.energy.collector`
-worker container. The web container has `HomeWizardCollector__Enabled=false`;
-the collector container has `HomeWizardCollector__Enabled=true`. Keep a single
-collector instance running for the single HomeWizard P1 meter.
+worker container. The MVC web app does not register or run the background
+collector; it reads collected data for reporting and may connect to the P1
+meter only for realtime Raw Data/Insights display. The collector container has
+`HomeWizardCollector__Enabled=true`. Keep a single collector instance running
+for the single HomeWizard P1 meter.
+
 
 For each redeployment from your Mac, set your own deployment values and run:
 

@@ -6,7 +6,7 @@ public class HomeWizardCollectorOptions
 
     public string Scheme { get; set; } = "https";
 
-    public string Host { get; set; } = "192.168.1.32";
+    public string Host { get; set; } = "";
 
     public string? Token { get; set; }
 
