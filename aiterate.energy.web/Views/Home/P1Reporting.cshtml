@@ -17,8 +17,12 @@
             </div>
         </div>
         <div>
-            <div class="form-label">Total</div>
+            <div class="form-label">Total consumed</div>
             <div id="dailyTotal" class="fs-5 fw-semibold">0.000 kWh</div>
+        </div>
+        <div>
+            <div class="form-label">Total delivered back</div>
+            <div id="dailyExportTotal" class="fs-5 fw-semibold">0.000 kWh</div>
         </div>
     </div>
 </div>
@@ -34,6 +38,7 @@
     const selectedDay = document.getElementById('selectedDay');
     const nextDay = document.getElementById('nextDay');
     const dailyTotal = document.getElementById('dailyTotal');
+    const dailyExportTotal = document.getElementById('dailyExportTotal');
     const chartCanvas = document.getElementById('dailyConsumptionChart');
     const today = new Date();
     let activeDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -65,12 +70,24 @@
         data: {
             labels: [],
             datasets: [{
+                type: 'bar',
                 label: 'Consumption (kWh)',
                 data: [],
-                backgroundColor: 'rgba(25, 135, 84, 0.75)',
-                borderColor: 'rgba(25, 135, 84, 1)',
+                backgroundColor: 'rgba(220, 53, 69, 0.75)',
+                borderColor: 'rgba(220, 53, 69, 1)',
                 borderWidth: 1,
                 stack: 'energy'
+            }, {
+                type: 'line',
+                label: 'Delivered back (kWh)',
+                data: [],
+                borderColor: 'rgba(144, 238, 144, 1)',
+                backgroundColor: 'rgba(144, 238, 144, 0.2)',
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 3,
+                tension: 0.25,
+                fill: false
             }]
         },
         options: {
@@ -114,11 +131,12 @@
                     callbacks: {
                         label: function (context) {
                             const bucket = context.raw;
+                            const label = context.dataset.label || 'Value';
                             if (!bucket || bucket.y === null) {
-                                return 'Consumption: no data';
+                                return `${label}: no data`;
                             }
 
-                            return `Consumption: ${bucket.y.toFixed(3)} kWh`;
+                            return `${label}: ${bucket.y.toFixed(3)} kWh`;
                         },
                         afterLabel: function (context) {
                             const bucket = context.raw;
@@ -148,7 +166,14 @@
             hasData: bucket.hasData,
             isReliable: bucket.isReliable
         }));
+        chart.data.datasets[1].data = report.buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.exportKwh,
+            hasData: bucket.hasData,
+            isReliable: bucket.isReliable
+        }));
         dailyTotal.textContent = `${Number(report.totalConsumptionKwh).toFixed(3)} kWh`;
+        dailyExportTotal.textContent = `${Number(report.totalExportKwh).toFixed(3)} kWh`;
         chart.update();
     }
 
