@@ -22,6 +22,49 @@ hosting on a Synology NAS with Docker.
 - Background collector: hosted service in the web app that polls
   `/api/measurement` and writes 15-minute aggregates
 
+## Local Energy Hardware
+
+- HomeWizard P1 meter for grid import/export measurements.
+- Enphase Standard-S-EU gateway with active Ethernet connection.
+- 6 x Enphase IQ8AC micro-inverters.
+- 6 x 430 Wp solar panels.
+- Marstek Venus E v1 battery on its own circuit/group, with 5.12 kWh storage
+  capacity and max 2500 W charge/discharge.
+
+## Enphase Local Gateway Access
+
+- Enphase gateway IP observed during local testing: `192.168.1.108`.
+- Enphase gateway serial number: `122240013676`.
+- Anonymous local requests to `https://192.168.1.108/production.json` and
+  `https://192.168.1.108/api/v1/production` return HTTP 401, so authenticated
+  firmware/token access is required.
+- Use Insomnia for Enphase HTTP request testing.
+- Obtain the Enphase `session_id` manually by opening
+  `https://enlighten.enphaseenergy.com/login/login.json` in a regular browser,
+  logging in with the Enphase/Enlighten account, then copying the `session_id`
+  from the browser developer tools.
+- In Insomnia, request the gateway token:
+  - Method: `POST`
+  - URL: `https://entrez.enphaseenergy.com/tokens`
+  - Header: `Content-Type: application/json`
+  - Body type: `JSON`
+  - Body:
+    ```json
+    {
+      "session_id": "PASTE_SESSION_ID_HERE",
+      "serial_num": "122240013676",
+      "username": "your-enphase-email@example.com"
+    }
+    ```
+- Use the returned token in Insomnia against the local gateway:
+  - Method: `GET`
+  - URL: `https://192.168.1.108/production.json`
+  - Header: `Authorization: Bearer PASTE_TOKEN_HERE`
+  - Disable SSL certificate validation in Insomnia if the gateway certificate is
+    rejected.
+- Alternative local endpoint to test with the same bearer token:
+  `https://192.168.1.108/api/v1/production`.
+
 ## Important Runtime Facts
 
 - Local development currently uses the `AiterateDev` database.

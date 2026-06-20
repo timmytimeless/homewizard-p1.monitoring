@@ -24,11 +24,21 @@
             <div class="form-label">Total delivered back</div>
             <div id="dailyExportTotal" class="fs-5 fw-semibold">0.000 kWh</div>
         </div>
+        <div>
+            <div class="form-label">Net grid use</div>
+            <div id="dailyNetTotal" class="fs-5 fw-semibold">0.000 kWh</div>
+        </div>
     </div>
 </div>
 
+<h2 class="h5 mb-2">Consumption and delivery</h2>
 <div style="height:55vh; min-height:320px;">
     <canvas id="dailyConsumptionChart" style="width:100%; height:100%;"></canvas>
+</div>
+
+<h2 class="h5 mt-4 mb-2">Stroom van en naar het net</h2>
+<div style="height:45vh; min-height:280px;">
+    <canvas id="netEnergyFlowChart" style="width:100%; height:100%;"></canvas>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -39,7 +49,9 @@
     const nextDay = document.getElementById('nextDay');
     const dailyTotal = document.getElementById('dailyTotal');
     const dailyExportTotal = document.getElementById('dailyExportTotal');
+    const dailyNetTotal = document.getElementById('dailyNetTotal');
     const chartCanvas = document.getElementById('dailyConsumptionChart');
+    const netFlowCanvas = document.getElementById('netEnergyFlowChart');
     const today = new Date();
     let activeDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -65,16 +77,64 @@
         });
     }
 
+    function isCheaperTariffPeriod(label) {
+        return label >= '12:00' && label < '16:00';
+    }
+
+    function gridConsumptionColor(label) {
+        return isCheaperTariffPeriod(label)
+            ? 'rgba(248, 150, 159, 0.75)'
+            : 'rgba(220, 53, 69, 0.75)';
+    }
+
+    function gridConsumptionBorderColor(label) {
+        return isCheaperTariffPeriod(label)
+            ? 'rgba(248, 150, 159, 1)'
+            : 'rgba(220, 53, 69, 1)';
+    }
+
+    const cheaperTariffBackgroundPlugin = {
+        id: 'cheaperTariffBackground',
+        beforeDatasetsDraw: function (chart) {
+            const xScale = chart.scales.x;
+            const chartArea = chart.chartArea;
+            if (!xScale || !chartArea) {
+                return;
+            }
+
+            const startIndex = chart.data.labels.indexOf('12:00');
+            const endIndex = chart.data.labels.indexOf('16:00');
+            if (startIndex < 0 || endIndex < 0) {
+                return;
+            }
+
+            const bucketWidth = xScale.getPixelForValue(startIndex + 1) - xScale.getPixelForValue(startIndex);
+            const left = xScale.getPixelForValue(startIndex) - (bucketWidth / 2);
+            const right = xScale.getPixelForValue(endIndex) - (bucketWidth / 2);
+            const context = chart.ctx;
+
+            context.save();
+            context.fillStyle = 'rgba(220, 220, 220, 0.45)';
+            context.fillRect(left, chartArea.top, right - left, chartArea.bottom - chartArea.top);
+            context.restore();
+        }
+    };
+
     const chart = new Chart(chartCanvas, {
         type: 'bar',
+        plugins: [cheaperTariffBackgroundPlugin],
         data: {
             labels: [],
             datasets: [{
                 type: 'bar',
                 label: 'Consumption (kWh)',
                 data: [],
-                backgroundColor: 'rgba(220, 53, 69, 0.75)',
-                borderColor: 'rgba(220, 53, 69, 1)',
+                backgroundColor: function (context) {
+                    return gridConsumptionColor(context.raw?.x);
+                },
+                borderColor: function (context) {
+                    return gridConsumptionBorderColor(context.raw?.x);
+                },
                 borderWidth: 1,
                 stack: 'energy'
             }, {
@@ -152,6 +212,130 @@
         }
     });
 
+    const netFlowChart = new Chart(netFlowCanvas, {
+        type: 'bar',
+        plugins: [cheaperTariffBackgroundPlugin],
+        data: {
+            labels: [],
+            datasets: [{
+                type: 'bar',
+                label: 'Van het net (kWh)',
+                data: [],
+                backgroundColor: function (context) {
+                    return gridConsumptionColor(context.raw?.x);
+                },
+                borderColor: function (context) {
+                    return gridConsumptionBorderColor(context.raw?.x);
+                },
+                borderWidth: 1,
+                yAxisID: 'energy',
+                order: 2
+            }, {
+                type: 'bar',
+                label: 'Teruggeleverd (kWh)',
+                data: [],
+                backgroundColor: 'rgba(25, 135, 84, 0.75)',
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1,
+                yAxisID: 'energy',
+                order: 2
+            }, {
+                type: 'line',
+                label: 'Gemiddeld vermogen (W)',
+                data: [],
+                borderColor: 'rgba(13, 110, 253, 1)',
+                backgroundColor: 'rgba(13, 110, 253, 0.15)',
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 3,
+                tension: 0.2,
+                yAxisID: 'power',
+                order: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    ticks: {
+                        autoSkip: false,
+                        maxRotation: 0,
+                        callback: function (value, index) {
+                            const label = this.getLabelForValue(value);
+                            return index % 4 === 0 ? label : '';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                },
+                energy: {
+                    type: 'linear',
+                    position: 'left',
+                    stacked: true,
+                    title: {
+                        display: true,
+                        text: 'kWh per 15 minuten'
+                    }
+                },
+                power: {
+                    type: 'linear',
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Gemiddeld W'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const bucket = context.raw;
+                            const label = context.dataset.label || 'Value';
+                            if (!bucket || bucket.y === null) {
+                                return `${label}: no data`;
+                            }
+
+                            if (context.dataset.yAxisID === 'power') {
+                                return `${label}: ${bucket.y.toFixed(0)} W`;
+                            }
+
+                            return `${label}: ${Math.abs(bucket.y).toFixed(3)} kWh`;
+                        },
+                        afterBody: function (items) {
+                            const bucket = items.length > 0 ? items[0].raw : null;
+                            if (!bucket || !bucket.hasData) {
+                                return '';
+                            }
+
+                            const lines = [`Netto verbruik: ${bucket.netKwh.toFixed(3)} kWh`];
+                            if (!bucket.isReliable) {
+                                lines.push('Marked unreliable');
+                            }
+
+                            return lines;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     async function loadReport(date) {
         const response = await fetch(`/p1-reporting/data?date=${encodeURIComponent(date)}`);
         if (!response.ok) {
@@ -159,22 +343,61 @@
         }
 
         const report = await response.json();
+        const buckets = report.buckets.map(bucket => ({
+            label: bucket.label,
+            consumptionKwh: bucket.consumptionKwh === null ? null : Number(bucket.consumptionKwh),
+            exportKwh: bucket.exportKwh === null ? null : Number(bucket.exportKwh),
+            netKwh: bucket.netKwh === null ? null : Number(bucket.netKwh),
+            averagePowerW: bucket.averagePowerW === null ? null : Number(bucket.averagePowerW),
+            hasData: bucket.hasData,
+            isReliable: bucket.isReliable
+        }));
+
         chart.data.labels = report.buckets.map(bucket => bucket.label);
-        chart.data.datasets[0].data = report.buckets.map(bucket => ({
+        chart.data.datasets[0].data = buckets.map(bucket => ({
             x: bucket.label,
             y: bucket.consumptionKwh,
             hasData: bucket.hasData,
             isReliable: bucket.isReliable
         }));
-        chart.data.datasets[1].data = report.buckets.map(bucket => ({
+        chart.data.datasets[1].data = buckets.map(bucket => ({
             x: bucket.label,
             y: bucket.exportKwh,
             hasData: bucket.hasData,
             isReliable: bucket.isReliable
         }));
+
+        netFlowChart.data.labels = buckets.map(bucket => bucket.label);
+        netFlowChart.data.datasets[0].data = buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.consumptionKwh,
+            netKwh: bucket.netKwh,
+            hasData: bucket.hasData,
+            isReliable: bucket.isReliable
+        }));
+        netFlowChart.data.datasets[1].data = buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.exportKwh === null ? null : -bucket.exportKwh,
+            netKwh: bucket.netKwh,
+            hasData: bucket.hasData,
+            isReliable: bucket.isReliable
+        }));
+        netFlowChart.data.datasets[2].data = buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.averagePowerW,
+            netKwh: bucket.netKwh,
+            hasData: bucket.hasData,
+            isReliable: bucket.isReliable
+        }));
+
+        const totalConsumptionKwh = Number(report.totalConsumptionKwh);
+        const totalExportKwh = Number(report.totalExportKwh);
+        const totalNetKwh = totalConsumptionKwh - totalExportKwh;
         dailyTotal.textContent = `${Number(report.totalConsumptionKwh).toFixed(3)} kWh`;
         dailyExportTotal.textContent = `${Number(report.totalExportKwh).toFixed(3)} kWh`;
+        dailyNetTotal.textContent = `${totalNetKwh.toFixed(3)} kWh`;
         chart.update();
+        netFlowChart.update();
     }
 
     previousDay.addEventListener('click', function () {

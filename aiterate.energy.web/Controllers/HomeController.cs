@@ -333,6 +333,7 @@ public class HomeController(
                 aggregate.PeriodStart,
                 aggregate.EnergyImportKwh,
                 aggregate.EnergyExportKwh,
+                aggregate.AveragePowerW,
                 aggregate.IsReliable
             })
             .ToListAsync();
@@ -353,6 +354,8 @@ public class HomeController(
                     periodStart = periodStart.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture),
                     consumptionKwh = hasData ? aggregate!.EnergyImportKwh : (decimal?)null,
                     exportKwh = hasData ? aggregate!.EnergyExportKwh : (decimal?)null,
+                    netKwh = hasData ? aggregate!.EnergyImportKwh - aggregate.EnergyExportKwh : (decimal?)null,
+                    averagePowerW = hasData ? aggregate!.AveragePowerW : (decimal?)null,
                     hasData,
                     isReliable = hasData && aggregate!.IsReliable
                 };
