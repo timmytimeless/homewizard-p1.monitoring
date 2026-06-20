@@ -8,6 +8,8 @@ hosting on a Synology NAS with Docker.
 
 - Stream HomeWizard P1 measurements in real time through the web app.
 - Store compact 15-minute MariaDB aggregates instead of raw minute-level rows.
+- Store compact 15-minute Enphase solar production aggregates from the local
+  gateway instead of raw samples.
 - Demonstrate a setup that runs on modest hardware, including a stock
   Synology DS925+ with 4 GB RAM.
 
@@ -19,8 +21,11 @@ hosting on a Synology NAS with Docker.
 - Identity: ASP.NET Identity in the same MariaDB database
 - Runtime token protection: ASP.NET Data Protection
 - Realtime source: HomeWizard local API `/api/ws` for live streaming
-- Background collector: hosted service in the web app that polls
-  `/api/measurement` and writes 15-minute aggregates
+- Dedicated collector project: `aiterate.energy.collector`
+- Background collector: hosted service in the dedicated collector project that
+  polls `/api/measurement` and writes 15-minute HomeWizard aggregates
+- Enphase source: local gateway `production.json`, authenticated with
+  `EnphaseCollector__Token`
 
 ## Local Energy Hardware
 
@@ -81,6 +86,8 @@ hosting on a Synology NAS with Docker.
 - `Models/HomeWizardMeasurement.cs` is the HomeWizard API DTO.
 - `Models/Persistence/HomeWizardQuarterHourAggregate.cs` is the MariaDB entity
   for the 15-minute rollup table.
+- `Models/Persistence/EnphaseQuarterHourAggregate.cs` is the MariaDB entity for
+  15-minute solar production rollups.
 - The collector calculates:
   - kWh deltas from cumulative counters
   - power min/max/average
@@ -98,16 +105,28 @@ hosting on a Synology NAS with Docker.
 - `aiterate.energy.web/Services/HomeWizard/HomeWizardMeasurementCollectorService.cs`
 - `aiterate.energy.web/Services/HomeWizard/HomeWizardAggregateUpdater.cs`
 - `aiterate.energy.web/Services/HomeWizard/HomeWizardCertificateValidator.cs`
+- `aiterate.energy.web/Services/Enphase/EnphaseProductionCollectorService.cs`
+- `aiterate.energy.web/Services/Enphase/EnphaseAggregateUpdater.cs`
+- `aiterate.energy.web/Models/Persistence/EnphaseQuarterHourAggregate.cs`
+- `aiterate.energy.collector/Program.cs`
 
 ## Local Configuration
 
 - User secrets currently hold the local MariaDB connection string.
 - The local connection string points to `AiterateDev`.
+- Design-time EF migrations can use `ConnectionStrings:Migrations` with the
+  `aiterate_migrator` MariaDB user. Runtime should keep using
+  `ConnectionStrings:Identity` with the lower-privileged app user.
 - `HomeWizardCollector:Enabled` is set to `true` in development config.
 - `HomeWizardCollector:Scheme` is `https`.
 - `HomeWizardCollector:Host` is the HomeWizard device IP.
 - `HomeWizard:CertificateSha256` pins the device certificate.
 - `DataProtection:KeysPath` in development points to `.data-protection-keys`.
+- Enphase collector local token should be stored in user secrets as
+  `EnphaseCollector:Token`.
+- Enphase collector production token should be provided as
+  `EnphaseCollector__Token`.
+- Enphase collector defaults to 5-minute polling and 15-minute buckets.
 
 ## Deployment Notes
 

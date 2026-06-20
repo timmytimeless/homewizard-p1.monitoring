@@ -28,6 +28,10 @@
             <div class="form-label">Net grid use</div>
             <div id="dailyNetTotal" class="fs-5 fw-semibold">0.000 kWh</div>
         </div>
+        <div>
+            <div class="form-label">Zonneopwek</div>
+            <div id="dailySolarTotal" class="fs-5 fw-semibold">0.000 kWh</div>
+        </div>
     </div>
 </div>
 
@@ -41,6 +45,11 @@
     <canvas id="netEnergyFlowChart" style="width:100%; height:100%;"></canvas>
 </div>
 
+<h2 class="h5 mt-4 mb-2">Zonneenergie opgewekt</h2>
+<div style="height:45vh; min-height:280px;">
+    <canvas id="solarProductionChart" style="width:100%; height:100%;"></canvas>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {
@@ -50,8 +59,10 @@
     const dailyTotal = document.getElementById('dailyTotal');
     const dailyExportTotal = document.getElementById('dailyExportTotal');
     const dailyNetTotal = document.getElementById('dailyNetTotal');
+    const dailySolarTotal = document.getElementById('dailySolarTotal');
     const chartCanvas = document.getElementById('dailyConsumptionChart');
     const netFlowCanvas = document.getElementById('netEnergyFlowChart');
+    const solarProductionCanvas = document.getElementById('solarProductionChart');
     const today = new Date();
     let activeDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -336,6 +347,111 @@
         }
     });
 
+    const solarProductionChart = new Chart(solarProductionCanvas, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                type: 'bar',
+                label: 'Opgewekt (kWh)',
+                data: [],
+                backgroundColor: 'rgba(255, 193, 7, 0.75)',
+                borderColor: 'rgba(255, 193, 7, 1)',
+                borderWidth: 1,
+                yAxisID: 'energy',
+                order: 2
+            }, {
+                type: 'line',
+                label: 'Gemiddeld vermogen (W)',
+                data: [],
+                borderColor: 'rgba(253, 126, 20, 1)',
+                backgroundColor: 'rgba(253, 126, 20, 0.15)',
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 3,
+                tension: 0.2,
+                yAxisID: 'power',
+                order: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        autoSkip: false,
+                        maxRotation: 0,
+                        callback: function (value, index) {
+                            const label = this.getLabelForValue(value);
+                            return index % 4 === 0 ? label : '';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                },
+                energy: {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'kWh per 15 minuten'
+                    }
+                },
+                power: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Gemiddeld W'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const bucket = context.raw;
+                            const label = context.dataset.label || 'Value';
+                            if (!bucket || bucket.y === null) {
+                                return `${label}: geen data`;
+                            }
+
+                            if (context.dataset.yAxisID === 'power') {
+                                return `${label}: ${bucket.y.toFixed(0)} W`;
+                            }
+
+                            return `${label}: ${bucket.y.toFixed(3)} kWh`;
+                        },
+                        afterBody: function (items) {
+                            const bucket = items.length > 0 ? items[0].raw : null;
+                            if (!bucket || !bucket.hasSolarData || bucket.isSolarReliable) {
+                                return '';
+                            }
+
+                            return 'Gemarkeerd als onbetrouwbaar';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     async function loadReport(date) {
         const response = await fetch(`/p1-reporting/data?date=${encodeURIComponent(date)}`);
         if (!response.ok) {
@@ -349,8 +465,12 @@
             exportKwh: bucket.exportKwh === null ? null : Number(bucket.exportKwh),
             netKwh: bucket.netKwh === null ? null : Number(bucket.netKwh),
             averagePowerW: bucket.averagePowerW === null ? null : Number(bucket.averagePowerW),
+            solarProductionKwh: bucket.solarProductionKwh === null ? null : Number(bucket.solarProductionKwh),
+            averageSolarPowerW: bucket.averageSolarPowerW === null ? null : Number(bucket.averageSolarPowerW),
             hasData: bucket.hasData,
-            isReliable: bucket.isReliable
+            isReliable: bucket.isReliable,
+            hasSolarData: bucket.hasSolarData,
+            isSolarReliable: bucket.isSolarReliable
         }));
 
         chart.data.labels = report.buckets.map(bucket => bucket.label);
@@ -390,14 +510,31 @@
             isReliable: bucket.isReliable
         }));
 
+        solarProductionChart.data.labels = buckets.map(bucket => bucket.label);
+        solarProductionChart.data.datasets[0].data = buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.solarProductionKwh,
+            hasSolarData: bucket.hasSolarData,
+            isSolarReliable: bucket.isSolarReliable
+        }));
+        solarProductionChart.data.datasets[1].data = buckets.map(bucket => ({
+            x: bucket.label,
+            y: bucket.averageSolarPowerW,
+            hasSolarData: bucket.hasSolarData,
+            isSolarReliable: bucket.isSolarReliable
+        }));
+
         const totalConsumptionKwh = Number(report.totalConsumptionKwh);
         const totalExportKwh = Number(report.totalExportKwh);
         const totalNetKwh = totalConsumptionKwh - totalExportKwh;
+        const totalSolarProductionKwh = Number(report.totalSolarProductionKwh);
         dailyTotal.textContent = `${Number(report.totalConsumptionKwh).toFixed(3)} kWh`;
         dailyExportTotal.textContent = `${Number(report.totalExportKwh).toFixed(3)} kWh`;
         dailyNetTotal.textContent = `${totalNetKwh.toFixed(3)} kWh`;
+        dailySolarTotal.textContent = `${totalSolarProductionKwh.toFixed(3)} kWh`;
         chart.update();
         netFlowChart.update();
+        solarProductionChart.update();
     }
 
     previousDay.addEventListener('click', function () {

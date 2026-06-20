@@ -20,10 +20,12 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
             .SetBasePath(basePath)
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile($"appsettings.{environment}.json", optional: true)
+            .AddUserSecrets<ApplicationDbContextFactory>(optional: true)
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("Identity")
+        var connectionString = configuration.GetConnectionString("Migrations")
+            ?? configuration.GetConnectionString("Identity")
             ?? throw new InvalidOperationException("Connection string 'Identity' was not found.");
         var serverVersion = configuration["MariaDb:ServerVersion"] ?? "10.11.0";
 

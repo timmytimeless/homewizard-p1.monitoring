@@ -1,5 +1,6 @@
 using aiterate.energy.web.Data;
 using aiterate.energy.web.Services;
+using aiterate.energy.web.Services.Enphase;
 using aiterate.energy.web.Services.HomeWizard;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -48,5 +49,19 @@ builder.Services.AddHttpClient(nameof(HomeWizardMeasurementCollectorService))
         };
     });
 builder.Services.AddHostedService<HomeWizardMeasurementCollectorService>();
+builder.Services.Configure<EnphaseCollectorOptions>(builder.Configuration.GetSection("EnphaseCollector"));
+builder.Services.AddHttpClient(nameof(EnphaseProductionCollectorService))
+    .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+    {
+        var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<EnphaseCollectorOptions>>().Value;
+        var handler = new HttpClientHandler();
+        if (options.AllowInvalidCertificate)
+        {
+            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        }
+
+        return handler;
+    });
+builder.Services.AddHostedService<EnphaseProductionCollectorService>();
 
 await builder.Build().RunAsync();

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.WebSockets;
@@ -338,7 +339,30 @@ public class HomeController(
             })
             .ToListAsync();
 
+        var enphaseAggregates = new List<EnphaseReportingAggregate>();
+        try
+        {
+            enphaseAggregates = await dbContext.EnphaseQuarterHourAggregates
+                .AsNoTracking()
+                .Where(aggregate => aggregate.PeriodStart >= dayStart && aggregate.PeriodStart < nextDay)
+                .Select(aggregate => new EnphaseReportingAggregate(
+                    aggregate.PeriodStart,
+                    aggregate.EnergyProductionKwh,
+                    aggregate.AveragePowerW,
+                    aggregate.IsReliable))
+                .ToListAsync();
+        }
+        catch (DbException ex) when (ex.Message.Contains("EnphaseQuarterHourAggregates", StringComparison.OrdinalIgnoreCase)
+                                     && ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase))
+        {
+            enphaseAggregates = [];
+        }
+
         var aggregatesByPeriod = aggregates
+            .GroupBy(aggregate => aggregate.PeriodStart)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var enphaseAggregatesByPeriod = enphaseAggregates
             .GroupBy(aggregate => aggregate.PeriodStart)
             .ToDictionary(group => group.Key, group => group.First());
 
@@ -347,6 +371,7 @@ public class HomeController(
             {
                 var periodStart = dayStart.AddMinutes(index * 15);
                 var hasData = aggregatesByPeriod.TryGetValue(periodStart, out var aggregate);
+                var hasSolarData = enphaseAggregatesByPeriod.TryGetValue(periodStart, out var enphaseAggregate);
 
                 return new
                 {
@@ -357,7 +382,11 @@ public class HomeController(
                     netKwh = hasData ? aggregate!.EnergyImportKwh - aggregate.EnergyExportKwh : (decimal?)null,
                     averagePowerW = hasData ? aggregate!.AveragePowerW : (decimal?)null,
                     hasData,
-                    isReliable = hasData && aggregate!.IsReliable
+                    isReliable = hasData && aggregate!.IsReliable,
+                    solarProductionKwh = hasSolarData ? enphaseAggregate!.EnergyProductionKwh : (decimal?)null,
+                    averageSolarPowerW = hasSolarData ? enphaseAggregate!.AveragePowerW : (decimal?)null,
+                    hasSolarData,
+                    isSolarReliable = hasSolarData && enphaseAggregate!.IsReliable
                 };
             })
             .ToList();
@@ -367,7 +396,14 @@ public class HomeController(
             date = selectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             totalConsumptionKwh = aggregates.Sum(aggregate => aggregate.EnergyImportKwh),
             totalExportKwh = aggregates.Sum(aggregate => aggregate.EnergyExportKwh),
+            totalSolarProductionKwh = enphaseAggregates.Sum(aggregate => aggregate.EnergyProductionKwh),
             buckets
         });
     }
+
+    private sealed record EnphaseReportingAggregate(
+        DateTime PeriodStart,
+        decimal EnergyProductionKwh,
+        decimal AveragePowerW,
+        bool IsReliable);
 }
