@@ -16,5 +16,7 @@ public class EnphaseCollectorOptions
 
     public int BucketMinutes { get; set; } = 15;
 
+    public string TimeZoneId { get; set; } = "Europe/Amsterdam";
+
     public bool AllowInvalidCertificate { get; set; } = true;
 }

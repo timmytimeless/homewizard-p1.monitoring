@@ -77,6 +77,7 @@ EnphaseCollector__Host=<enphase-gateway-ip>
 EnphaseCollector__Endpoint=/production.json
 EnphaseCollector__PollIntervalSeconds=300
 EnphaseCollector__BucketMinutes=15
+EnphaseCollector__TimeZoneId=Europe/Amsterdam
 EnphaseCollector__AllowInvalidCertificate=true
 EnphaseCollector__Token=<enphase-gateway-token>
 ```
@@ -114,6 +115,9 @@ Data Protection keys as the web app.
 Configure `EnphaseCollector__Token` in the NAS environment file. The Enphase
 collector polls the local gateway every 300 seconds by default and writes
 15-minute solar production aggregates based on the gateway `whLifetime` delta.
+`EnphaseCollector__TimeZoneId` should remain `Europe/Amsterdam` so the gateway
+Unix `readingTime` is bucketed in Dutch local time even when the Docker
+container itself runs in UTC.
 
 ## HTTPS
 

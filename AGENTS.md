@@ -127,6 +127,9 @@ hosting on a Synology NAS with Docker.
 - Enphase collector production token should be provided as
   `EnphaseCollector__Token`.
 - Enphase collector defaults to 5-minute polling and 15-minute buckets.
+- Enphase collector should use `EnphaseCollector:TimeZoneId=Europe/Amsterdam`
+  so gateway Unix `readingTime` values are bucketed in Amsterdam local time,
+  independent of the Docker/container timezone.
 
 ## Deployment Notes
 

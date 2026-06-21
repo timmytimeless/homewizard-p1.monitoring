@@ -51,12 +51,13 @@ public class EnphaseProductionCollectorService(
         using var timer = new PeriodicTimer(interval);
 
         logger.LogInformation(
-            "Enphase collector started. Endpoint={Scheme}://{Host}{Endpoint}, interval={IntervalSeconds}s, bucket={BucketMinutes}m.",
+            "Enphase collector started. Endpoint={Scheme}://{Host}{Endpoint}, interval={IntervalSeconds}s, bucket={BucketMinutes}m, timeZone={TimeZoneId}.",
             _options.Scheme,
             _options.Host,
             _options.Endpoint,
             interval.TotalSeconds,
-            _options.BucketMinutes);
+            _options.BucketMinutes,
+            _options.TimeZoneId);
 
         await PollOnceAsync(stoppingToken);
 
@@ -161,12 +162,34 @@ public class EnphaseProductionCollectorService(
 
     private DateTime ParseReadingTimeOrNow(long readingTime)
     {
+        var timeZone = ResolveTimeZone();
         if (readingTime <= 0)
         {
-            return timeProvider.GetLocalNow().DateTime;
+            return TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timeZone).DateTime;
         }
 
-        return DateTimeOffset.FromUnixTimeSeconds(readingTime).LocalDateTime;
+        return TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(readingTime), timeZone).DateTime;
+    }
+
+    private TimeZoneInfo ResolveTimeZone()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.TimeZoneId))
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(_options.TimeZoneId);
+            }
+            catch (TimeZoneNotFoundException ex)
+            {
+                logger.LogWarning(ex, "Configured EnphaseCollector:TimeZoneId '{TimeZoneId}' was not found. Falling back to local timezone.", _options.TimeZoneId);
+            }
+            catch (InvalidTimeZoneException ex)
+            {
+                logger.LogWarning(ex, "Configured EnphaseCollector:TimeZoneId '{TimeZoneId}' is invalid. Falling back to local timezone.", _options.TimeZoneId);
+            }
+        }
+
+        return TimeZoneInfo.Local;
     }
 
     private static DateTime RoundDown(DateTime value, int bucketMinutes)
